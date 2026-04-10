@@ -758,6 +758,12 @@
           </select>
         </div>
         <div class="filter-group">
+          <span class="filter-label">Cohorte:</span>
+          <select id="filtroCohorteDetalle" onchange="renderDetalle()">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <span class="filter-label">Agente:</span>
           <select id="filtroAgenteDetalle" onchange="renderDetalle()">
             <option value="">Todos</option>
@@ -982,10 +988,11 @@ function deleteRowById(ss, name, id) {
 <div class="modal-overlay" id="modalAgente">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">Nuevo agente</span>
+      <span class="modal-title" id="modalAgenteTitle">Nuevo agente</span>
       <button class="modal-close" onclick="closeModal('modalAgente')">×</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="agEditId">
       <div class="form-group">
         <label class="form-label">Nombre completo *</label>
         <input type="text" id="agNombre" placeholder="Nombre y apellido">
@@ -997,7 +1004,7 @@ function deleteRowById(ss, name, id) {
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" style="border-color:var(--gris-borde);color:var(--texto)" onclick="closeModal('modalAgente')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveAgente()">Crear agente</button>
+      <button class="btn btn-primary" id="btnSaveAgente" onclick="saveAgente()">Crear agente</button>
     </div>
   </div>
 </div>
@@ -1010,7 +1017,7 @@ function deleteRowById(ss, name, id) {
 // STATE
 // ============================================================
 let db = { registros: [], agentes: [] };
-const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbyrUgoc1Z3BETZuqND6ATT8wZG1mI37uGwEx_LNg1kTZUxV0R7yukg8huOZKpKLtkRvzw/exec';
+const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzW32_wbbFUhsvL8Chm4GtGF9cl1E8v7GPKbVp_coew-TINofjan1u-f0yFmB5QaogKMA/exec';
 let appsScriptUrl = localStorage.getItem('lb_br_url') || DEFAULT_URL;
 let syncInterval = null;
 
@@ -1170,21 +1177,47 @@ function saveRegistro() {
 function saveAgente() {
   const nombre = document.getElementById('agNombre').value.trim();
   const cohorte = document.getElementById('agCohorte').value.trim();
+  const editId = document.getElementById('agEditId').value;
 
   if (!nombre) { showToast('Ingresá el nombre del agente', 'error'); return; }
-  if (db.agentes.find(a => a.nombre === nombre)) {
-    showToast('Ya existe un agente con ese nombre', 'error'); return;
-  }
 
-  const row = { id: 'A' + Date.now(), nombre, cohorte };
-  sendToSheet('saveAgente', row, () => {
-    db.agentes.push(row);
-    closeModal('modalAgente');
-    renderAll();
-    showToast('Agente creado ✓', 'success');
-    document.getElementById('agNombre').value = '';
-    document.getElementById('agCohorte').value = '';
-  });
+  if (editId) {
+    // EDITAR agente existente
+    const row = { id: editId, nombre, cohorte };
+    sendToSheet('updateAgente', row, () => {
+      const idx = db.agentes.findIndex(a => a.id === editId);
+      if (idx !== -1) db.agentes[idx] = row;
+      closeModal('modalAgente');
+      renderAll();
+      showToast('Agente actualizado ✓', 'success');
+    });
+  } else {
+    // CREAR agente nuevo
+    if (db.agentes.find(a => a.nombre === nombre)) {
+      showToast('Ya existe un agente con ese nombre', 'error'); return;
+    }
+    const row = { id: 'A' + Date.now(), nombre, cohorte };
+    sendToSheet('saveAgente', row, () => {
+      db.agentes.push(row);
+      closeModal('modalAgente');
+      renderAll();
+      showToast('Agente creado ✓', 'success');
+    });
+  }
+  document.getElementById('agNombre').value = '';
+  document.getElementById('agCohorte').value = '';
+  document.getElementById('agEditId').value = '';
+}
+
+function editAgente(id) {
+  const a = db.agentes.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('agEditId').value = a.id;
+  document.getElementById('agNombre').value = a.nombre;
+  document.getElementById('agCohorte').value = a.cohorte || '';
+  document.getElementById('modalAgenteTitle').textContent = 'Editar agente';
+  document.getElementById('btnSaveAgente').textContent = 'Guardar cambios';
+  document.getElementById('modalAgente').classList.add('show');
 }
 
 // ============================================================
@@ -1243,6 +1276,15 @@ function populateSelects() {
     const cur = filtroSem.value;
     filtroSem.innerHTML = '<option value="">Todas</option>';
     semanas.forEach(s => filtroSem.innerHTML += `<option value="${s}"${s===cur?' selected':''}>${s}</option>`);
+  }
+
+  // Cohortes dinamicas para detalle
+  const cohortes = [...new Set(db.agentes.map(a => a.cohorte).filter(Boolean))].sort();
+  const filtroC = document.getElementById('filtroCohorteDetalle');
+  if (filtroC) {
+    const cur = filtroC.value;
+    filtroC.innerHTML = '<option value="">Todas</option>';
+    cohortes.forEach(c => filtroC.innerHTML += `<option value="${c}"${c===cur?' selected':''}>${c}</option>`);
   }
 
   ['filtroAgente','filtroAgenteDetalle'].forEach(id => {
@@ -1422,7 +1464,12 @@ function renderRatioAgentes(regs) {
 // DETALLE
 // ============================================================
 function renderDetalle() {
-  const regs = getFilteredRegistros('filtroMesDetalle', '', 'filtroAgenteDetalle');
+  const cohorteDetalle = document.getElementById('filtroCohorteDetalle')?.value || '';
+  let regs = getFilteredRegistros('filtroMesDetalle', '', 'filtroAgenteDetalle');
+  if (cohorteDetalle) {
+    const agentesEnCohorte = db.agentes.filter(a => a.cohorte === cohorteDetalle).map(a => a.nombre);
+    regs = regs.filter(r => agentesEnCohorte.includes(r.agente));
+  }
   const tbody = document.getElementById('tablaDetalleBody');
 
   if (!regs.length) {
@@ -1479,7 +1526,8 @@ function renderAgentes() {
         <td style="color:var(--verde-base);font-weight:600">${totalPL}</td>
         <td style="color:var(--oro-oscuro)">${ratio}</td>
         <td>${regs.length}</td>
-        <td>
+        <td style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" style="border-color:var(--gris-borde);color:var(--texto-suave)" onclick="editAgente('${a.id}')">✎</button>
           <button class="btn btn-danger btn-sm" onclick="deleteAgente('${a.id}')">✕</button>
         </td>
       </tr>
@@ -1492,6 +1540,13 @@ function renderAgentes() {
 // ============================================================
 function openModal(id) {
   populateSelects();
+  if (id === 'modalAgente') {
+    document.getElementById('agEditId').value = '';
+    document.getElementById('agNombre').value = '';
+    document.getElementById('agCohorte').value = '';
+    document.getElementById('modalAgenteTitle').textContent = 'Nuevo agente';
+    document.getElementById('btnSaveAgente').textContent = 'Crear agente';
+  }
   document.getElementById(id).classList.add('show');
 }
 function closeModal(id) {
