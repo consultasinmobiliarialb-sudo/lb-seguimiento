@@ -350,9 +350,12 @@
     font-size: 11px;
     font-weight: 600;
   }
-  .badge-verde { background: #dcfce7; color: #166534; }
-  .badge-oro { background: #fef3c7; color: #92400e; }
-  .badge-gris { background: #f3f4f6; color: #374151; }
+  .badge-verde   { background: #dcfce7; color: #166534; }
+  .badge-celeste { background: #dbeafe; color: #1e40af; }
+  .badge-oro     { background: #fef3c7; color: #92400e; }
+  .badge-naranja { background: #ffedd5; color: #9a3412; }
+  .badge-rojo    { background: #fee2e2; color: #991b1b; }
+  .badge-gris    { background: #f3f4f6; color: #374151; }
 
   /* RATIO BAR */
   .ratio-bar {
@@ -1022,6 +1025,31 @@ let appsScriptUrl = localStorage.getItem('lb_br_url') || DEFAULT_URL;
 let syncInterval = null;
 
 // ============================================================
+// PARÁMETROS DE CALIDAD
+// ============================================================
+const META_DIARIA    = 5;
+const META_EXCELENTE = 7;
+const SEMANA_DIAS    = 5;
+const META_SEMANAL_OK  = META_DIARIA    * SEMANA_DIAS; // 25
+const META_SEMANAL_EXC = META_EXCELENTE * SEMANA_DIAS; // 35
+
+function getQuality(ratio) {
+  const r = Number(ratio);
+  if (r <= 7)  return { badge: 'badge-verde',   label: 'Excelente'  };
+  if (r <= 10) return { badge: 'badge-celeste',  label: 'Muy bueno'  };
+  if (r <= 15) return { badge: 'badge-oro',      label: 'Bueno'      };
+  if (r <= 25) return { badge: 'badge-naranja',  label: 'Regular'    };
+  return             { badge: 'badge-rojo',      label: 'A revisar'  };
+}
+
+function getVolumenBadge(promSemanal) {
+  const c = Number(promSemanal);
+  if (c >= META_SEMANAL_EXC) return { badge: 'badge-verde',   label: '\u2605 Excelente volumen' };
+  if (c >= META_SEMANAL_OK)  return { badge: 'badge-celeste',  label: '\u2713 Objetivo alcanzado' };
+  return                            { badge: 'badge-naranja',  label: '\u2193 Bajo objetivo' };
+}
+
+// ============================================================
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -1400,13 +1428,18 @@ function renderRanking(regs) {
   }
 
   rl.innerHTML = sorted.map(([nombre, stats], i) => {
-    const ratio = stats.pl > 0 ? (stats.contactos / stats.pl).toFixed(1) : '—';
+    const ratio = stats.pl > 0 ? (stats.contactos / stats.pl) : null;
+    const ratioLabel = ratio !== null ? ratio.toFixed(1) : '—';
+    const q = ratio !== null ? getQuality(ratio) : { badge: 'badge-gris', label: '—' };
     return `
       <div class="ranking-item">
         <div class="rank-num ${i < 3 ? 'top' : ''}">${i + 1}</div>
         <div class="rank-info">
           <div class="rank-name">${nombre}</div>
-          <div class="rank-meta">${stats.contactos} contactos · ratio ${ratio}</div>
+          <div class="rank-meta" style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <span>${stats.contactos} contactos · ratio ${ratioLabel}</span>
+            <span class="badge ${q.badge}" style="font-size:10px;padding:2px 7px;">${q.label}</span>
+          </div>
         </div>
         <div class="rank-stats">
           <div class="rank-stat-main">${stats.pl}</div>
@@ -1420,43 +1453,55 @@ function renderRanking(regs) {
 function renderRatioAgentes(regs) {
   const el = document.getElementById('ratioAgentes');
 
+  // Agrupar por agente: contactos totales y semanas para promedio semanal
   const byAgent = {};
   regs.forEach(r => {
-    if (!byAgent[r.agente]) byAgent[r.agente] = { pl: 0, contactos: 0 };
-    byAgent[r.agente].pl += Number(r.prelistings)||0;
+    if (!byAgent[r.agente]) byAgent[r.agente] = { pl: 0, contactos: 0, semanas: 0 };
+    byAgent[r.agente].pl        += Number(r.prelistings)||0;
     byAgent[r.agente].contactos += Number(r.contactos)||0;
+    byAgent[r.agente].semanas   += 1;
   });
 
-  const agentes = Object.entries(byAgent).filter(([,s]) => s.pl > 0);
+  const agentes = Object.entries(byAgent);
   if (!agentes.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📈</div><div>Sin datos con pre listings</div></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📈</div><div>Sin datos</div></div>';
     return;
   }
 
-  // Menor ratio = mejor calidad
-  const maxRatio = Math.max(...agentes.map(([,s]) => s.contactos / s.pl));
+  // Para la barra visual usamos escala fija basada en el peor caso (ratio 50)
+  const MAX_RATIO_VISUAL = 50;
 
   el.innerHTML = agentes
-    .sort((a,b) => (a[1].contactos/a[1].pl) - (b[1].contactos/b[1].pl))
+    .sort((a,b) => {
+      // Los sin PL van al final, ordenados por contactos desc
+      const rA = a[1].pl > 0 ? a[1].contactos / a[1].pl : 9999;
+      const rB = b[1].pl > 0 ? b[1].contactos / b[1].pl : 9999;
+      return rA - rB;
+    })
     .map(([nombre, stats]) => {
-      const ratio = (stats.contactos / stats.pl).toFixed(1);
-      const pct = Math.round((1 - (ratio - 1) / (maxRatio)) * 100);
-      const fill = Math.max(5, Math.min(100, pct));
-      const quality = ratio <= 5 ? 'badge-verde' : ratio <= 10 ? 'badge-oro' : 'badge-gris';
-      const qualityLabel = ratio <= 5 ? 'Excelente' : ratio <= 10 ? 'Buena' : 'En desarrollo';
-      return `
-        <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid #f0ede8;">
-          <div style="width:160px;font-size:13.5px;font-weight:500;">${nombre}</div>
-          <div style="flex:1;">
+      const ratio       = stats.pl > 0 ? (stats.contactos / stats.pl) : null;
+      const ratioLabel  = ratio !== null ? ratio.toFixed(1) + ':1' : 'Sin PL';
+      const fill        = ratio !== null ? Math.max(4, Math.round((1 - (ratio - 1) / MAX_RATIO_VISUAL) * 100)) : 4;
+      const q           = ratio !== null ? getQuality(ratio) : { badge: 'badge-gris', label: 'Sin datos' };
+      const promSem     = stats.semanas > 0 ? Math.round(stats.contactos / stats.semanas) : 0;
+      const vol         = getVolumenBadge(promSem);
+
+      return \`
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #f0ede8;flex-wrap:wrap;">
+          <div style="width:140px;font-size:13.5px;font-weight:500;flex-shrink:0;">\${nombre}</div>
+          <div style="flex:1;min-width:120px;">
             <div class="ratio-bar">
-              <div class="ratio-track"><div class="ratio-fill" style="width:${fill}%"></div></div>
-              <div class="ratio-text">${ratio}:1</div>
+              <div class="ratio-track"><div class="ratio-fill" style="width:\${fill}%"></div></div>
+              <div class="ratio-text">\${ratioLabel}</div>
             </div>
           </div>
-          <div><span class="badge ${quality}">${qualityLabel}</span></div>
-          <div style="font-size:12px;color:var(--texto-suave);min-width:80px;text-align:right;">${stats.contactos} contactos</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+            <span class="badge \${q.badge}">\${q.label}</span>
+            <span class="badge \${vol.badge}" title="Promedio semanal: \${promSem} contactos">\${vol.label}</span>
+          </div>
+          <div style="font-size:12px;color:var(--texto-suave);min-width:90px;text-align:right;flex-shrink:0;">\${stats.contactos} contactos</div>
         </div>
-      `;
+      \`;
     }).join('');
 }
 
