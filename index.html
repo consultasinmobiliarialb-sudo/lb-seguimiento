@@ -672,10 +672,6 @@
           <span class="filter-label">Semana:</span>
           <select id="filtroSemana" onchange="renderDashboard()">
             <option value="">Todas</option>
-            <option value="1">Semana 1</option>
-            <option value="2">Semana 2</option>
-            <option value="3">Semana 3</option>
-            <option value="4">Semana 4</option>
           </select>
         </div>
         <div class="filter-group">
@@ -957,12 +953,7 @@ function deleteRowById(ss, name, id) {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Semana del mes *</label>
-          <select id="regSemana">
-            <option value="1">Semana 1</option>
-            <option value="2">Semana 2</option>
-            <option value="3">Semana 3</option>
-            <option value="4">Semana 4</option>
-          </select>
+          <input type="text" id="regSemana" placeholder="ej: Primera Semana de Abril (7-13)">
         </div>
         <div class="form-group">
           <label class="form-label">Contactos realizados *</label>
@@ -1019,7 +1010,7 @@ function deleteRowById(ss, name, id) {
 // STATE
 // ============================================================
 let db = { registros: [], agentes: [] };
-const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbxBAfxO1xjGwABBfefXecXo3qtvqmWdpdUg0CtcCn_X8_1oox03s4Pe1zfc4t50867ONg/exec';
+const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbyrUgoc1Z3BETZuqND6ATT8wZG1mI37uGwEx_LNg1kTZUxV0R7yukg8huOZKpKLtkRvzw/exec';
 let appsScriptUrl = localStorage.getItem('lb_br_url') || DEFAULT_URL;
 let syncInterval = null;
 
@@ -1227,15 +1218,16 @@ function getFilteredRegistros(mesEl, semanaEl, agenteEl) {
 
   return db.registros.filter(r => {
     if (mes && r.mes !== mes) return false;
-    if (semana && String(r.semana) !== semana) return false;
+    if (semana && r.semana !== semana) return false;
     if (agente && r.agente !== agente) return false;
     return true;
   });
 }
 
 function populateSelects() {
-  const meses = [...new Set(db.registros.map(r => r.mes))].sort();
-  const agentes = db.agentes.map(a => a.nombre).sort();
+  const meses = [...new Set(db.registros.map(r => r.mes).filter(Boolean))].sort();
+  const semanas = [...new Set(db.registros.map(r => r.semana).filter(Boolean))];
+  const agentes = [...new Set(db.registros.map(r => r.agente).filter(Boolean))].sort();
 
   ['filtroMes','filtroMesDetalle'].forEach(id => {
     const el = document.getElementById(id);
@@ -1245,6 +1237,14 @@ function populateSelects() {
     meses.forEach(m => el.innerHTML += `<option value="${m}"${m===cur?' selected':''}>${m}</option>`);
   });
 
+  // Semanas dinamicas desde los datos
+  const filtroSem = document.getElementById('filtroSemana');
+  if (filtroSem) {
+    const cur = filtroSem.value;
+    filtroSem.innerHTML = '<option value="">Todas</option>';
+    semanas.forEach(s => filtroSem.innerHTML += `<option value="${s}"${s===cur?' selected':''}>${s}</option>`);
+  }
+
   ['filtroAgente','filtroAgenteDetalle'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1253,7 +1253,7 @@ function populateSelects() {
     agentes.forEach(a => el.innerHTML += `<option value="${a}"${a===cur?' selected':''}>${a}</option>`);
   });
 
-  // Modal agente select
+  // Modal agente select — poblado desde agentes unicos en registros
   const regAg = document.getElementById('regAgente');
   if (regAg) {
     const cur = regAg.value;
@@ -1294,7 +1294,7 @@ function renderChartTendencia(regs) {
   // Agrupar por mes + semana
   const groups = {};
   regs.forEach(r => {
-    const key = `${r.mes} S${r.semana}`;
+    const key = r.semana || r.mes;
     if (!groups[key]) groups[key] = { contactos: 0, prelistings: 0 };
     groups[key].contactos += Number(r.contactos)||0;
     groups[key].prelistings += Number(r.prelistings)||0;
