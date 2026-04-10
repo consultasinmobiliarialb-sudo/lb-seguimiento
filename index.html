@@ -709,29 +709,53 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;" id="mainChartGrid">
-        <!-- Gráfico tendencia -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Contactos vs Pre Listings</span>
-            <div class="chart-legend">
-              <div class="legend-item"><div class="legend-dot" style="background:var(--verde-base)"></div>Contactos</div>
-              <div class="legend-item"><div class="legend-dot" style="background:var(--oro)"></div>Pre Listings</div>
-            </div>
-          </div>
-          <div class="chart-container" id="chartTendencia">
-            <div class="empty-state"><div class="empty-icon">📊</div><div>Sin datos</div></div>
+      <!-- Gráfico tendencia -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-header">
+          <span class="card-title">Contactos vs Pre Listings</span>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--verde-base)"></div>Contactos</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--oro)"></div>Pre Listings</div>
           </div>
         </div>
+        <div class="chart-container" id="chartTendencia">
+          <div class="empty-state"><div class="empty-icon">📊</div><div>Sin datos</div></div>
+        </div>
+      </div>
 
-        <!-- Ranking -->
+      <!-- Rankings dobles -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;" id="mainChartGrid">
+
+        <!-- Ranking por pre listings -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Ranking de agentes</span>
-            <span style="font-size:12px;color:var(--texto-suave)">por pre listings</span>
+            <span class="card-title">Ranking · Pre Listings</span>
+            <span style="font-size:11px;color:var(--texto-suave);background:#eef6f0;color:var(--verde-base);padding:3px 10px;border-radius:20px;font-weight:600;">Conversión</span>
           </div>
           <div class="ranking-list" id="rankingList">
             <div class="empty-state"><div class="empty-icon">🏆</div><div>Sin datos</div></div>
+          </div>
+        </div>
+
+        <!-- Ranking por volumen de contactos -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Ranking · Contactos</span>
+            <span style="font-size:11px;background:#fef9ee;color:var(--oro-oscuro);padding:3px 10px;border-radius:20px;font-weight:600;">Volumen semanal</span>
+          </div>
+          <div class="ranking-list" id="rankingVolumen">
+            <div class="empty-state"><div class="empty-icon">📞</div><div>Sin datos</div></div>
+          </div>
+          <div style="padding:10px 22px 14px;border-top:1px solid var(--gris-borde);display:flex;gap:16px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--texto-suave);">
+              <span style="width:10px;height:10px;border-radius:2px;background:#dcfce7;border:1px solid #166534;display:inline-block;"></span>≥35/sem (★ Excelente)
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--texto-suave);">
+              <span style="width:10px;height:10px;border-radius:2px;background:#dbeafe;border:1px solid #1e40af;display:inline-block;"></span>≥25/sem (✓ Objetivo)
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--texto-suave);">
+              <span style="width:10px;height:10px;border-radius:2px;background:#ffedd5;border:1px solid #9a3412;display:inline-block;"></span>&lt;25/sem (↓ Bajo)
+            </div>
           </div>
         </div>
       </div>
@@ -1274,6 +1298,7 @@ function renderDashboard() {
 
   renderChartTendencia(regs);
   renderRanking(regs);
+  renderRankingVolumen(regs);
   renderRatioAgentes(regs);
 }
 
@@ -1363,6 +1388,57 @@ function renderRanking(regs) {
         <div class="rank-stats">
           <div class="rank-stat-main">${stats.pl}</div>
           <div class="rank-stat-sub">pre listings</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRankingVolumen(regs) {
+  const rl = document.getElementById('rankingVolumen');
+  if (!rl) return;
+
+  const byAgent = {};
+  regs.forEach(r => {
+    if (!byAgent[r.agente]) byAgent[r.agente] = { contactos: 0, semanas: 0, pl: 0 };
+    byAgent[r.agente].contactos += Number(r.contactos)||0;
+    byAgent[r.agente].semanas   += 1;
+    byAgent[r.agente].pl        += Number(r.prelistings)||0;
+  });
+
+  const sorted = Object.entries(byAgent)
+    .sort((a,b) => b[1].contactos - a[1].contactos)
+    .slice(0, 7);
+
+  if (!sorted.length) {
+    rl.innerHTML = '<div class="empty-state"><div class="empty-icon">📞</div><div>Sin datos</div></div>';
+    return;
+  }
+
+  const maxC = sorted[0][1].contactos || 1;
+
+  rl.innerHTML = sorted.map(([nombre, stats], i) => {
+    const promSem  = stats.semanas > 0 ? Math.round(stats.contactos / stats.semanas) : 0;
+    const vol      = getVolumenBadge(promSem);
+    const barPct   = Math.round((stats.contactos / maxC) * 100);
+    const barColor = promSem >= META_SEMANAL_EXC ? 'var(--verde-base)' :
+                     promSem >= META_SEMANAL_OK  ? '#3b82f6' : 'var(--oro-oscuro)';
+    return `
+      <div class="ranking-item" style="flex-direction:column;align-items:stretch;padding:11px 22px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="rank-num ${i < 3 ? 'top' : ''}" style="flex-shrink:0;">${i + 1}</div>
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <span style="font-weight:500;font-size:13.5px;">${nombre}</span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--verde-oscuro);">${stats.contactos}</span>
+                <span class="badge ${vol.badge}" style="font-size:10px;padding:2px 8px;white-space:nowrap;">${promSem}/sem</span>
+              </div>
+            </div>
+            <div style="height:5px;background:var(--gris-borde);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${barPct}%;background:${barColor};border-radius:3px;"></div>
+            </div>
+          </div>
         </div>
       </div>
     `;
