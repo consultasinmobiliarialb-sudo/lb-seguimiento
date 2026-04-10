@@ -850,88 +850,7 @@
           <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--gris-borde);">
             <div class="form-label" style="margin-bottom:12px;">Código Apps Script para el Sheet</div>
             <p style="font-size:12px;color:var(--texto-suave);margin-bottom:10px;">Pegá este código en tu Google Apps Script, creá una nueva versión (no editar en el lugar) y deployalo como Web App.</p>
-            <div style="background:#f8f7f4;border:1px solid var(--gris-borde);border-radius:8px;padding:14px;font-family:monospace;font-size:11.5px;line-height:1.7;color:#333;overflow-x:auto;white-space:pre;" id="codeBlock">/* ===== LB Base de Relaciones — Apps Script ===== */
-const SPREADSHEET_ID = 'TU_SPREADSHEET_ID_AQUI';
-
-function doGet(e) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const action = e.parameter.action || 'getData';
-  const callback = e.parameter.callback || 'cb';
-
-  if (action === 'getData') {
-    const data = {
-      registros: getSheet(ss, 'Registros'),
-      agentes: getSheet(ss, 'Agentes')
-    };
-    return jsonp(callback, data);
-  }
-
-  if (action === 'saveRegistro') {
-    const row = JSON.parse(decodeURIComponent(e.parameter.payload));
-    appendRow(ss, 'Registros', row);
-    return jsonp(callback, { ok: true });
-  }
-
-  if (action === 'deleteRegistro') {
-    const id = e.parameter.id;
-    deleteRowById(ss, 'Registros', id);
-    return jsonp(callback, { ok: true });
-  }
-
-  if (action === 'saveAgente') {
-    const row = JSON.parse(decodeURIComponent(e.parameter.payload));
-    appendRow(ss, 'Agentes', row);
-    return jsonp(callback, { ok: true });
-  }
-
-  if (action === 'deleteAgente') {
-    const id = e.parameter.id;
-    deleteRowById(ss, 'Agentes', id);
-    return jsonp(callback, { ok: true });
-  }
-
-  return jsonp(callback, { error: 'Acción desconocida' });
-}
-
-function jsonp(cb, data) {
-  return ContentService
-    .createTextOutput(cb + '(' + JSON.stringify(data) + ')')
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
-}
-
-function getSheet(ss, name) {
-  const sh = ss.getSheetByName(name);
-  if (!sh) return [];
-  const rows = sh.getDataRange().getValues();
-  if (rows.length < 2) return [];
-  const headers = rows[0];
-  return rows.slice(1).map(r => {
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = r[i]);
-    return obj;
-  });
-}
-
-function appendRow(ss, name, row) {
-  let sh = ss.getSheetByName(name);
-  if (!sh) sh = ss.insertSheet(name);
-  if (sh.getLastRow() === 0) {
-    sh.appendRow(Object.keys(row));
-  }
-  sh.appendRow(Object.values(row));
-}
-
-function deleteRowById(ss, name, id) {
-  const sh = ss.getSheetByName(name);
-  if (!sh) return;
-  const data = sh.getDataRange().getValues();
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][0]) === String(id)) {
-      sh.deleteRow(i + 1);
-      break;
-    }
-  }
-}</div>
+            <div style="background:#f8f7f4;border:1px solid var(--gris-borde);border-radius:8px;padding:14px;font-family:monospace;font-size:11.5px;line-height:1.7;color:#333;overflow-x:auto;white-space:pre;" id="codeBlock"></div>
             <button class="btn btn-outline" style="border-color:var(--gris-borde);color:var(--texto-suave);margin-top:10px;font-size:12px;" onclick="copyCode()">Copiar código</button>
           </div>
         </div>
@@ -1612,6 +1531,130 @@ function showToast(msg, type = 'success') {
   t.className = 'toast show ' + type;
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+// Inject Apps Script code safely
+document.addEventListener('DOMContentLoaded', function() {
+  var el = document.getElementById('codeBlock');
+  if (el) {
+    el.textContent = [
+      '/* ===== LB Base de Relaciones — Apps Script ===== */',
+      "const SPREADSHEET_ID = '1Wo2YqXXhI0GfkZ_w2jKcOgjcHGsJMA0lf5CGKm4mVZg';",
+      '',
+      'function doGet(e) {',
+      '  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);',
+      "  const action = e.parameter.action || 'getData';",
+      "  const callback = e.parameter.callback || 'cb';",
+      '',
+      "  if (action === 'getData') {",
+      '    const data = {',
+      "      registros: getSheet(ss, 'Resumen'),",
+      "      agentes: getAgentes(ss, 'Resumen')",
+      '    };',
+      '    return jsonp(callback, data);',
+      '  }',
+      '',
+      "  if (action === 'saveRegistro') {",
+      '    const row = JSON.parse(decodeURIComponent(e.parameter.payload));',
+      "    appendToResumen(ss, row);",
+      '    return jsonp(callback, { ok: true });',
+      '  }',
+      '',
+      "  if (action === 'deleteRegistro') {",
+      '    const id = e.parameter.id;',
+      "    deleteRowById(ss, 'Resumen', id);",
+      '    return jsonp(callback, { ok: true });',
+      '  }',
+      '',
+      "  if (action === 'saveAgente') {",
+      '    const row = JSON.parse(decodeURIComponent(e.parameter.payload));',
+      "    appendRow(ss, 'Agentes', row);",
+      '    return jsonp(callback, { ok: true });',
+      '  }',
+      '',
+      "  if (action === 'updateAgente') {",
+      '    const row = JSON.parse(decodeURIComponent(e.parameter.payload));',
+      '    updateAgenteRow(ss, row);',
+      '    return jsonp(callback, { ok: true });',
+      '  }',
+      '',
+      "  if (action === 'deleteAgente') {",
+      '    const id = e.parameter.id;',
+      "    deleteRowById(ss, 'Agentes', id);",
+      '    return jsonp(callback, { ok: true });',
+      '  }',
+      '',
+      "  return jsonp(callback, { error: 'Accion desconocida' });",
+      '}',
+      '',
+      'function jsonp(cb, data) {',
+      '  return ContentService',
+      "    .createTextOutput(cb + '(' + JSON.stringify(data) + ')')",
+      '    .setMimeType(ContentService.MimeType.JAVASCRIPT);',
+      '}',
+      '',
+      'function getSheet(ss, name) {',
+      '  const sh = ss.getSheetByName(name);',
+      '  if (!sh) return [];',
+      '  const rows = sh.getDataRange().getValues();',
+      '  if (rows.length < 2) return [];',
+      '  const headers = rows[0];',
+      '  return rows.slice(1).map((r, i) => ({',
+      "    id: 'R' + (i + 2),",
+      '    mes: r[0], semana: r[1], agente: r[2],',
+      '    contactos: Number(r[3])||0, prelistings: Number(r[4])||0,',
+      "    observaciones: r[5] || ''",
+      '  }));',
+      '}',
+      '',
+      'function getAgentes(ss, name) {',
+      '  const sh = ss.getSheetByName(name);',
+      '  if (!sh) return [];',
+      '  const rows = sh.getDataRange().getValues();',
+      '  if (rows.length < 2) return [];',
+      '  const nombres = [...new Set(rows.slice(1).map(r => r[2]).filter(Boolean))];',
+      "  return nombres.map((n, i) => ({ id: 'A' + i, nombre: n, cohorte: '' }));",
+      '}',
+      '',
+      'function appendToResumen(ss, row) {',
+      "  let sh = ss.getSheetByName('Resumen');",
+      '  if (!sh) {',
+      "    sh = ss.insertSheet('Resumen');",
+      "    sh.appendRow(['Mes','Semana','Agente','Contacto','Prelisting','Observaciones']);",
+      '  }',
+      '  sh.appendRow([row.mes, row.semana, row.agente, row.contactos, row.prelistings, row.observaciones||""])',
+      '}',
+      '',
+      'function appendRow(ss, name, row) {',
+      '  let sh = ss.getSheetByName(name);',
+      '  if (!sh) { sh = ss.insertSheet(name); sh.appendRow(Object.keys(row)); }',
+      '  sh.appendRow(Object.values(row));',
+      '}',
+      '',
+      'function updateAgenteRow(ss, row) {',
+      "  let sh = ss.getSheetByName('Agentes');",
+      '  if (!sh) return;',
+      '  const data = sh.getDataRange().getValues();',
+      '  for (let i = 1; i < data.length; i++) {',
+      '    if (String(data[i][0]) === String(row.id)) {',
+      '      sh.getRange(i+1,1,1,3).setValues([[row.id, row.nombre, row.cohorte]]);',
+      '      return;',
+      '    }',
+      '  }',
+      '  appendRow(ss, "Agentes", row);',
+      '}',
+      '',
+      'function deleteRowById(ss, name, id) {',
+      '  const sh = ss.getSheetByName(name);',
+      '  if (!sh) return;',
+      '  const data = sh.getDataRange().getValues();',
+      '  for (let i = data.length - 1; i >= 1; i--) {',
+      '    if (String(data[i][0]) === String(id)) { sh.deleteRow(i+1); break; }',
+      '  }',
+      '}'
+    ].join('\n');
+  }
+});
+
 </script>
 </body>
 </html>
